@@ -1,1 +1,14 @@
 ressources/
+
+# gif-pipeline
+gif-pipeline/.env
+gif-pipeline/outputs/
+gif-pipeline/inputs/avatar.*
+gif-pipeline/inputs/refs/
+gif-pipeline/**/__pycache__/
+gif-pipeline/**/*.egg-info/
+gif-pipeline/build/
+gif-pipeline/dist/
+gif-pipeline/.venv/
+gif-pipeline/venv/
+gif-pipeline/*.zip
