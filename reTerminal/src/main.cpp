@@ -203,33 +203,34 @@ void setup()
             LOG.printf("[SD] No card detected at startup. Please insert a card.\n");
         }
 
-        if (forecastData.requestTime != (time_t)(-1) && forecastData.requestTime > readingEpoch - 2 * 60*60) {
-            LOG.printf("[FC] forecast recently updated\n");
+        // if (forecastData.requestTime != (time_t)(-1) && forecastData.requestTime > readingEpoch - 2 * 60*60) {
+        //     LOG.printf("[FC] forecast recently updated\n");
+        // } else {
+        //     LOG.printf("[FC] forecast out of date\n");
+        if (g_wifi.state() != WifiState::StaActive) {
+            LOG.printf("[STA] wifi not connected, can not request forecast\n");
         } else {
-            LOG.printf("[FC] forecast out of date\n");
-            if (g_wifi.state() != WifiState::StaActive) {
-                LOG.printf("[STA] wifi not connected, can not request forecast\n");
-            } else {
-                LOG.printf("[STA] requesting new forecast\n");
-                validForecast = requestForecast(dataString);
-                if (validForecast) {
-                    if (parseForecast(dataString, forecastData)) {
-                        dataString.remove(dataString.length() - 1);
-                        dataString = dataString + ",\"requestTime\":"+String(readingEpoch)+"\n}";
-                        LOG.printf("[FC] forecast request successful\n");
-                        if (g_sd.writeForecast(dataString)) {
-                            LOG.printf("[FC] fresh forecast stored\n");
-                        } else {
-                            LOG.printf("[FC] failed to store forecast\n");
-                        }
+            LOG.printf("[STA] requesting new forecast\n");
+            validForecast = requestForecast(dataString);
+            if (validForecast) {
+                forecastData.requestTime = (time_t)(-1);
+                dataString.remove(dataString.length() - 1);
+                dataString = dataString + ",\"requestTime\":"+String(readingEpoch)+"\n}";
+                LOG.printf("[FC] forecast request successful\n");
+                if (parseForecast(dataString, forecastData)) {
+                    if (g_sd.writeForecast(dataString)) {
+                        LOG.printf("[FC] fresh forecast stored\n");
                     } else {
-                        LOG.printf("[FC] forecast parse failed\n");
+                        LOG.printf("[FC] failed to store forecast\n");
                     }
                 } else {
-                    LOG.printf("[FC] forecast request failed\n");
+                    LOG.printf("[FC] forecast parse failed\n");
                 }
+            } else {
+                LOG.printf("[FC] forecast request failed\n");
             }
         }
+        // }
         dataString.clear();
         g_sd.unmountCard();
         g_sd.end();

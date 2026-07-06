@@ -87,6 +87,7 @@ void DashboardUi::drawForecast(const forecastData_t &forecastData) {
         m_display.drawString(buffer, MARGIN, GUI_FORECAST_INFO+MARGIN);
         return;
     } else {
+        m_display.setTextSize(1);
         m_display.setSwapBytes(true);//TODO:remove
         float xTemp;
         float yTemp;
@@ -100,19 +101,20 @@ void DashboardUi::drawForecast(const forecastData_t &forecastData) {
         size_t hour;
         for (size_t timeblock = 0; timeblock < FORECAST_LENGTH/TIME_STRIDE; ++timeblock) {
             xPos = m_display.width() * (float)timeblock/(FORECAST_LENGTH/TIME_STRIDE);
+            avg_temperature_2m = 0;
+            avg_cloud_cover = 0;
+            sum_precipitation = 0;
+            max_wind_speed_10m = 0;
+            max_precipitation_probability = 0;
             for (size_t offset = 0; offset < TIME_STRIDE; ++offset) {
                 hour = timeblock*TIME_STRIDE + offset;
-                avg_temperature_2m = 0;
-                avg_cloud_cover = 0;
-                sum_precipitation = 0;
-                max_wind_speed_10m = 0;
-                max_precipitation_probability = 0;
-                avg_cloud_cover += (float)forecastData.cloud_cover[hour]/TIME_STRIDE;
-                avg_temperature_2m += (float)forecastData.temperature_2m[hour]/TIME_STRIDE;
+                avg_cloud_cover += (float)forecastData.cloud_cover[hour]/(float)TIME_STRIDE;
+                avg_temperature_2m += (float)forecastData.temperature_2m[hour]/(float)TIME_STRIDE;
                 sum_precipitation += (float)forecastData.precipitation[hour];
                 max_wind_speed_10m = (float)max(forecastData.wind_speed_10m[hour], max_wind_speed_10m);
                 max_precipitation_probability = (float)max(forecastData.precipitation_probability[hour], max_precipitation_probability);
             }
+            max_precipitation_probability = min(max_precipitation_probability,(float)99);
             hour = timeblock*TIME_STRIDE + TIME_STRIDE/2;
 
             //weather symbol
@@ -141,24 +143,32 @@ void DashboardUi::drawForecast(const forecastData_t &forecastData) {
             //wind
             xTemp = xPos + BIG_ICON_SIZE;
             yTemp = yPos;
-            size_t windKMH = 10;
-            while (windKMH < max_wind_speed_10m && windKMH <= 10+20*5) {
+            size_t windKMH = 15; //15,30,45,60,75,90,105
+            while (windKMH < max_wind_speed_10m && windKMH <= 15+15*6) {
             m_display.pushImage(xTemp,yTemp,SMALL_ICON_SIZE,SMALL_ICON_SIZE,breeze);
                 yTemp += SMALL_ICON_SIZE;
-                windKMH += 20;
+                windKMH += 15;
             }
 
             //rain
-            xTemp = xPos;
+            xTemp = xPos + BIG_ICON_SIZE - SMALL_ICON_SIZE;
             yTemp = yPos + BIG_ICON_SIZE;
-            size_t rainMM = 2;
+            if (sum_precipitation>0) {
+                if (avg_temperature_2m>0) {
+                    m_display.pushImage(xTemp,yTemp,SMALL_ICON_SIZE,SMALL_ICON_SIZE,rain);
+                } else {
+                    m_display.pushImage(xTemp,yTemp,SMALL_ICON_SIZE,SMALL_ICON_SIZE,snow);
+                }
+                xTemp -= SMALL_ICON_SIZE;
+            }
+            size_t rainMM = 2;//0,2,4,8,16,32,64
             while (rainMM < sum_precipitation && rainMM <= 2<<5) {
                 if (avg_temperature_2m>0) {
                     m_display.pushImage(xTemp,yTemp,SMALL_ICON_SIZE,SMALL_ICON_SIZE,rain);
                 } else {
                     m_display.pushImage(xTemp,yTemp,SMALL_ICON_SIZE,SMALL_ICON_SIZE,snow);
                 }
-                xTemp += SMALL_ICON_SIZE;
+                xTemp -= SMALL_ICON_SIZE;
                 rainMM *= 2;
             }
             
@@ -174,7 +184,6 @@ void DashboardUi::drawForecast(const forecastData_t &forecastData) {
             //     m_display.pushImage(xTemp,yTemp,SMALL_ICON_SIZE,SMALL_ICON_SIZE,fog);
             // }
             xTemp -= 1;
-            m_display.setTextSize(1);
             char buffer[4] = {};
             snprintf(buffer, sizeof(buffer), "%d", (int)max_precipitation_probability);
             m_display.drawString(buffer, xTemp, yTemp);
@@ -182,7 +191,6 @@ void DashboardUi::drawForecast(const forecastData_t &forecastData) {
             // time label
             xTemp = xPos;
             yTemp = yPos + BIG_ICON_SIZE+SMALL_ICON_SIZE;
-            m_display.setTextSize(1);
             struct tm tmInfo{};
             time_t timeStamp = forecastData.startTime + hour*60*60;
             localtime_r(&timeStamp, &tmInfo);
@@ -218,6 +226,8 @@ void DashboardUi::plotForecast(const forecastData_t &forecastData) {
         snprintf(buffer, sizeof(buffer), "No Forecast Data\0");
         m_display.drawString(buffer, MARGIN, GUI_FORECAST_PLOT+MARGIN);
     } else {
+        m_display.setTextSize(1);
+        m_display.drawString("HISTORY", m_display.width()/2-32, GUI_FORECAST_PLOT);
         float xPos;
         float xPosPrev = -1;
         float xScaling = (float)m_display.width()/(float)FORECAST_LENGTH;
@@ -240,34 +250,32 @@ void DashboardUi::plotForecast(const forecastData_t &forecastData) {
         float presStart = ceilf(forecastData.min_pressure_msl / presStep) * presStep;
         float presEnd = floorf(forecastData.max_pressure_msl / presStep) * presStep;
 
-        m_display.setTextSize(1);
-
         for (float value = tempStart; value <= tempEnd + 0.1f; value += tempStep) {
             int yTick = GUI_HISTORY_PLOT - (int)((value - yOffset_temperature) * yScaling_temperature);
             if (yTick < GUI_FORECAST_PLOT || yTick > GUI_HISTORY_PLOT) continue;
             m_display.drawFastHLine(0, yTick, 2, TFT_GRAY_0);
             char label[8];
-            snprintf(label, sizeof(label), "%.0f", value);
+            snprintf(label, sizeof(label), "%.0fC", value);
             if (yTick - 10 < GUI_FORECAST_PLOT) {
                 yTick += 5;
             } else if (yTick + 10 > GUI_HISTORY_PLOT) {
                 yTick -= 5;
             }
-            m_display.drawString(label, 4 +40, yTick - 4);
+            m_display.drawString(label, 4, yTick - 4);//, TFT_GRAY_0);
         }
 
         for (float value = presStart; value <= presEnd + 0.1f; value += presStep) {
             int yTick = GUI_HISTORY_PLOT - (int)((value - yOffset_pressure_msl) * yScaling_pressure_msl);
             if (yTick < GUI_FORECAST_PLOT || yTick > GUI_HISTORY_PLOT) continue;
-            m_display.drawFastHLine(m_display.width() - 2, yTick, 2, TFT_GRAY_0);
+            m_display.drawFastHLine(m_display.width() - 2, yTick, 2, TFT_GRAY_2);
             char label[8];
-            snprintf(label, sizeof(label), "%.0f", value);
+            snprintf(label, sizeof(label), "%.0fhPa", value);
             if (yTick - 10 < GUI_FORECAST_PLOT) {
                 yTick += 5;
             } else if (yTick + 10 > GUI_HISTORY_PLOT) {
                 yTick -= 5;
             }
-            m_display.drawString(label, m_display.width() - 30 -40, yTick - 4);
+            m_display.drawString(label, m_display.width() - 44, yTick - 4);//, TFT_GRAY_2);
         }
 
         for (size_t hour = 0; hour < FORECAST_LENGTH; ++hour) {
@@ -295,8 +303,7 @@ void DashboardUi::plotForecast(const forecastData_t &forecastData) {
 
         // time label
         int yTemp = GUI_HISTORY_PLOT-8;
-        int xTemp = m_display.width()-100;
-        m_display.setTextSize(1);
+        int xTemp = m_display.width()-100-60;
         struct tm tmInfo{};
         time_t timeStamp = forecastData.requestTime;
         localtime_r(&timeStamp, &tmInfo);
@@ -309,7 +316,6 @@ void DashboardUi::plotForecast(const forecastData_t &forecastData) {
 void DashboardUi::plotHistory(const historicData_t &historicData) {
     m_display.setTextColor(TFT_GRAY_0, TFT_GRAY_3);
     m_display.setTextDatum(TL_DATUM);
-    m_display.setTextSize(8);
     
     if (historicData.min_Time >= historicData.max_Time) {
         m_display.setTextSize(8);
@@ -317,6 +323,8 @@ void DashboardUi::plotHistory(const historicData_t &historicData) {
         snprintf(buffer, sizeof(buffer), "No Historic Data\0");
         m_display.drawString(buffer, MARGIN, GUI_HISTORY_PLOT+MARGIN);
     } else {
+        m_display.setTextSize(1);
+        m_display.drawString("FORECAST", m_display.width()/2-32, GUI_HISTORY_PLOT);
         float xPos;
         float xPosPrev = -1;
         float xScaling = (float)m_display.width()/(historicData.max_Time-historicData.min_Time);
@@ -357,62 +365,60 @@ void DashboardUi::plotHistory(const historicData_t &historicData) {
         // float presStart = ceilf(historicData.min_pressure / presStep) * presStep;
         // float presEnd = floorf(historicData.max_pressure / presStep) * presStep;
 
-        float presStep = tickStep(0, 100);
-        float presStart = ceilf(0 / presStep) * presStep;
-        float presEnd = floorf(100 / presStep) * presStep;
+        float humStep = tickStep(0, 100);
+        float humStart = ceilf(0 / humStep) * humStep;
+        float humEnd = floorf(100 / humStep) * humStep;
 
-        m_display.setTextSize(1);
         for (float value = tempStart; value <= tempEnd + 0.1f; value += tempStep) {
             int yTick = GUI_BOTTOM - (int)((value - yOffset_temperature) * yScaling_temperature);
             if (yTick < GUI_HISTORY_PLOT || yTick > GUI_BOTTOM) continue;
             m_display.drawFastHLine(0, yTick, 2, TFT_GRAY_0);
             char label[8];
-            snprintf(label, sizeof(label), "%.0f", value);
+            snprintf(label, sizeof(label), "%.0fC", value);
             if (yTick - 10 < GUI_HISTORY_PLOT) {
                 yTick += 5;
             } else if (yTick + 10 > GUI_BOTTOM) {
                 yTick -= 5;
             }
-            m_display.drawString(label, 4 +40, yTick - 4);
+            m_display.drawString(label, 4, yTick - 4);//, TFT_GRAY_0);
         }
 
         // for (float value = presStart; value <= presEnd + 0.1f; value += presStep) {
         //     int yTick = GUI_BOTTOM - (int)((value - yOffset_pressure) * yScaling_pressure);
         //     if (yTick < GUI_HISTORY_PLOT || yTick > GUI_BOTTOM) continue;
-        //     m_display.drawFastHLine(m_display.width() - 2, yTick, 2, TFT_GRAY_0);
+        //     m_display.drawFastHLine(m_display.width() - 2, yTick, 2, TFT_GRAY_2);
         //     char label[8];
-        //     snprintf(label, sizeof(label), "%.0f", value);
+        //     snprintf(label, sizeof(label), "%.0fhPa", value);
         //     if (yTick - 10 < GUI_HISTORY_PLOT) {
         //         yTick += 5;
         //     } else if (yTick + 10 > GUI_BOTTOM) {
         //         yTick -= 5;
         //     }
-        //     m_display.drawString(label, m_display.width() - 16 -40, yTick - 4);
+        //     m_display.drawString(label, m_display.width() - 44, yTick - 4);//, TFT_GRAY_2);
         // }
 
-        for (float value = presStart; value <= presEnd + 0.1f; value += presStep) {
+        for (float value = humStart; value <= humEnd + 0.1f; value += humStep) {
             int yTick = GUI_BOTTOM - (int)((value - yOffset_relative_humidity) * yScaling_relative_humidity);
             if (yTick < GUI_HISTORY_PLOT || yTick > GUI_BOTTOM) continue;
-            m_display.drawFastHLine(m_display.width() - 2, yTick, 2, TFT_GRAY_0);
+            m_display.drawFastHLine(m_display.width() - 2, yTick, 2, TFT_GRAY_1);
             char label[8];
-            snprintf(label, sizeof(label), "%.0f", value);
+            snprintf(label, sizeof(label), "%.0f%%", value);
             if (yTick - 10 < GUI_HISTORY_PLOT) {
                 yTick += 5;
             } else if (yTick + 10 > GUI_BOTTOM) {
                 yTick -= 5;
             }
-            m_display.drawString(label, m_display.width() - 16 -40, yTick - 4);
+            m_display.drawString(label, m_display.width() - 19, yTick - 4);//, TFT_GRAY_1);
         }
 
         std::map<int, time_t> timeMap{
             {0, historicData.min_Time},
-            {m_display.width() - 100, historicData.max_Time}
+            {m_display.width() -100-60, historicData.max_Time}
         };
         for (auto sample : timeMap) {
             // time label
             int yTemp = GUI_BOTTOM-8;
             int xTemp = sample.first;
-            m_display.setTextSize(1);
             struct tm tmInfo{};
             time_t timeStamp = sample.second;
             localtime_r(&timeStamp, &tmInfo);
@@ -436,5 +442,5 @@ m_display.drawFastVLine(x, y, w, TFT_GRAY_0);
 m_display.drawLine(x0, y0, x1, y1, TFT_GRAY_0);
 m_display.drawCircle(x, y, w, TFT_GRAY_0);
 m_display.drawPixel(x, y, TFT_GRAY_0);
-m_display.drawString("str", x, y, TFT_GRAY_0);
+m_display.drawString("str", x, y);
 */
