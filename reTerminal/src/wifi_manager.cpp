@@ -5,9 +5,9 @@
 
 static const char indexHtml[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset="utf-8">
-<title>reTerminal Dashboard</title>
+<title>reTerminal - Setup</title>
 <style>
-body{font-family:sans-serif;max-width:680px;margin:2em auto;padding:0 1em;color:#222}
+body{font-family:sans-serif;max-width:80%;margin:1em auto;padding:0 1em;font-family:Tahoma,Verdana,Arial,sans-serif;background:#444;color:#ddd;}
 h1{font-size:1.4em;border-bottom:2px solid #444;padding-bottom:.2em}
 fieldset{margin:1em 0;padding:1em;border:1px solid #ccc;border-radius:6px}
 legend{font-weight:bold;padding:0 .4em}
@@ -15,14 +15,159 @@ input[type=text],input[type=password],input[type=number]{width:100%;padding:.5em
 label{display:block;margin:.5em 0 .2em}
 button{padding:.6em 1.2em;font-size:1em;margin-top:.6em;cursor:pointer}
 .ok{color:#080}.err{color:#a00}
-</style></head><body>
+</style>
+<script src="https://d3js.org/d3.v4.js"></script>
+</head><body>
+
 <h1>reTerminal E1001 — Dashboard</h1>
 
-<p>...</p>
-<p>//TODO:get and display historic data</p>
-<p>...</p>
+<h2>Temperature in °C</h2>
+<div id="temperature"></div>
 
-<p><a href="/setup">setup server</a></p>
+<script>
+
+// parse the date / time
+var parseTime = d3.timeParse("%d-%m-%Y_%H:%M:%S");
+
+// set the dimensions and margins of the graph
+var margin = {top: 10, right: 30, bottom: 30, left: 60},
+    width1 = 800 - margin.left - margin.right,
+    height1 = 300 - margin.top - margin.bottom;
+
+// set the ranges
+var x1 = d3.scaleTime().range([0, width1]);
+var y1 = d3.scaleLinear().range([height1, 0]);
+
+// define the 1st line
+var valueline1 = d3.line()
+    .x(function(d) { return x1(d.date); })
+    .y(function(d) { return y1(d.temperature); });
+
+// append the svg obgect to the the page
+var svg1 = d3.select("#temperature")
+  .append("svg")
+    .attr("width", width1 + margin.left + margin.right)
+    .attr("height", height1 + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform",
+          "translate(" + margin.left + "," + margin.top + ")");
+
+//##### Get the data #####
+
+d3.csv("weather/temperature.csv", function(error, data) {
+  if (error) throw error;
+
+  // format the data
+  data.forEach(function(d) {
+      d.date = parseTime(d.date);
+      d.temperature = +d.temperature;
+  });
+
+//##### plot#####
+
+  // Scale the range of the data
+  x1.domain(d3.extent(data, function(d) { return d.date; }));
+  y1.domain([d3.min(data, function(d) {
+    return Math.min(d.temperature); })
+    ,d3.max(data, function(d) {
+    return Math.max(d.temperature); })]);
+
+  // Add the valueline path.
+  svg1.append("path")
+      .data([data])
+      .attr("fill", "none")
+      .attr("class", "line")
+      .style("stroke", "red")
+      .attr("d", valueline1);
+
+  // Add the X Axis
+  svg1.append("g")
+      .attr("transform", "translate(0," + height1 + ")")
+      .call(d3.axisBottom(x1));
+
+  // Add the Y Axis
+  svg1.append("g")
+      .call(d3.axisLeft(y1));
+
+});
+
+</script>
+
+<h2>Humidity in %</h2>
+<div id="humidity"></div>
+
+<script>
+
+// parse the date / time
+var parseTime = d3.timeParse("%d-%m-%Y_%H:%M:%S");
+
+// set the dimensions and margins of the graph
+var margin = {top: 10, right: 30, bottom: 30, left: 60},
+    width1 = 800 - margin.left - margin.right,
+    height1 = 300 - margin.top - margin.bottom;
+
+// set the ranges
+var x2 = d3.scaleTime().range([0, width1]);
+var y2 = d3.scaleLinear().range([height1, 0]);
+
+// define the 1st line
+var valueline2 = d3.line()
+    .x(function(d) { return x2(d.date); })
+    .y(function(d) { return y2(d.humidity); });
+
+// append the svg obgect to the the page
+var svg2 = d3.select("#humidity")
+  .append("svg")
+    .attr("width", width1 + margin.left + margin.right)
+    .attr("height", height1 + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform",
+          "translate(" + margin.left + "," + margin.top + ")");
+
+//##### Get the data #####
+
+d3.csv("weather/humidity.csv", function(error, data) {
+  if (error) throw error;
+
+  // format the data
+  data.forEach(function(d) {
+      d.date = parseTime(d.date);
+      d.humidity = +d.humidity;
+  });
+
+//##### plot#####
+
+  // Scale the range of the data
+  x2.domain(d3.extent(data, function(d) { return d.date; }));
+  y2.domain([0,100]);
+
+  // Add the valueline path.
+  svg2.append("path")
+      .data([data])
+      .attr("fill", "none")
+      .attr("class", "line")
+      .style("stroke", "blue")
+      .attr("d", valueline2);
+
+  // Add the X Axis
+  svg2.append("g")
+      .attr("transform", "translate(0," + height1 + ")")
+      .call(d3.axisBottom(x2));
+
+  // Add the Y Axis
+  svg2.append("g")
+      .call(d3.axisLeft(y2));
+
+});
+
+</script>
+
+<h2>Pressure in mBar</h2>
+<div id="pressure"></div>
+
+<script>
+
+<p><a href="/setup">go to setup</a></p>
 </body></html>
 )HTML";
 
@@ -30,7 +175,7 @@ static const char configHtml[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset="utf-8">
 <title>reTerminal - Setup</title>
 <style>
-body{font-family:sans-serif;max-width:680px;margin:2em auto;padding:0 1em;color:#222}
+body{font-family:sans-serif;max-width:80%;margin:1em auto;padding:0 1em;font-family:Tahoma,Verdana,Arial,sans-serif;background:#444;color:#ddd;}
 h1{font-size:1.4em;border-bottom:2px solid #444;padding-bottom:.2em}
 fieldset{margin:1em 0;padding:1em;border:1px solid #ccc;border-radius:6px}
 legend{font-weight:bold;padding:0 .4em}
@@ -38,21 +183,25 @@ input[type=text],input[type=password],input[type=number]{width:100%;padding:.5em
 label{display:block;margin:.5em 0 .2em}
 button{padding:.6em 1.2em;font-size:1em;margin-top:.6em;cursor:pointer}
 .ok{color:#080}.err{color:#a00}
-</style></head><body>
-<h1>reTerminal E1001 — Dashboard</h1>
+</style>
+<script src="https://d3js.org/d3.v4.js"></script>
+</head><body>
+
+<h1>reTerminal E1001 — Setup</h1>
 
 <fieldset>
 <legend>Update Wi-Fi credentials</legend>
 <form method="POST" action="/config">
 <label>SSID</label>       <input type="text"     name="ssid" required>
 <label>Password</label>   <input type="password" name="pass">
-<label>Latitude</label>   <input type="number"   name="lat" step="0.001" value="52.5200">
-<label>Longitude</label>  <input type="number"   name="lon" step="0.001" value="13.4050">
+<label>Latitude</label>   <input type="number"   name="lat" step="0.001" value="+std::to_string(nvsForecastLatitude)+"> TODO:fix including coord
+<label>Longitude</label>  <input type="number"   name="lon" step="0.001" value="+std::to_string(nvsForecastLongitude)+"> TODO:fix including coord
 <label>Master Key</label> <input type="password" name="masterKey" required>
 <button type="submit">save</button>
 </form>
 </fieldset>
 
+<p><a href="/setup">go to setup</a></p>
 </body></html>
 )HTML";
 
