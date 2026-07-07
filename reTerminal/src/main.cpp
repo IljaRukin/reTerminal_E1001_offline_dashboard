@@ -32,6 +32,8 @@ DashboardUi g_ui;
 Buzzer g_buz;
 LED led;
 
+wakeupState_t wakeupState = wakeupState_t::Undefined;
+bool voltageOK = false;
 time_t readingEpoch = (time_t)(-1);
 
 void setup()
@@ -51,7 +53,7 @@ void setup()
     LOG.printf("\n ---------- [BOOT] %s v%s ---------- \n", FW_NAME, FW_VERSION);
     esp_reset_reason_t reset_reason = esp_reset_reason();
     esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
-    wakeupState_t wakeupState = getWakeupState(wakeup_cause);
+    wakeupState = getWakeupState(wakeup_cause);
     LOG.printf("[BOOT] reset reason: %s\n", resetReasonString(reset_reason));
     LOG.printf("[BOOT] wakeup reason: %s\n", wakeupReasonString(wakeup_cause));
     LOG.printf("[BOOT] wakeup state: %s\n", wakeupStateString(wakeupState));
@@ -68,9 +70,7 @@ void setup()
         LOG.printf("[I2C] ERROR: Bus clock set failed: %u Hz\n", I2C_FREQ_HZ);
     }
     
-    // RTC time
-    bool voltageOK = false;
-    // check the PCF8563 is reachable
+    // RTC - check the PCF8563 is reachable
     LOG.printf("[RTC] Probing PCF8563 at I2C address 0x%02X.\n", PCF8563_ADDR);
     if (g_rtc.rtcProbe()) {
         LOG.printf("[RTC] probing successful.\n");
@@ -123,14 +123,21 @@ void setup()
         LOG.printf("[RTC] NOT FOUND: check wiring.\n");
     }
 
+    readingEpoch = getEpochTime();
+
     // read nv memory
     loadNvsCredentials();
 
-    // init sensors
-    g_bat.begin();
     // get internal sensors data
+    g_bat.begin();
+
+    // reset wifi
+    g_wifi.begin();
+}
+
+void loop()
+{
     sensorInternal_t internalSensorSample;
-    readingEpoch = getEpochTime();
     internalSensorSample.timeStamp = readingEpoch;
     
     // read sensors: temperature, humidity
@@ -155,7 +162,6 @@ void setup()
     g_bat.end();
 
     // wifi sta mode
-    g_wifi.begin();
     if (wakeupState==wakeupState_t::LeftButton || wakeupState==wakeupState_t::MidButton) {
         g_wifi.requestSta(nvsStaSsid.c_str(), nvsStaPassword.c_str());
     }
@@ -235,10 +241,26 @@ void setup()
         g_sd.unmountCard();
         g_sd.end();
     }
-
+    
     //wifi ap mode
     if (wakeupState==wakeupState_t::MidButton) {
         g_wifi.requestAp(nvsApSsid.c_str(), nvsApPassword.c_str());
+        
+        // Build JSON data string
+        String jsonData = "[";
+        time_t iTime = (time_t)(-1);
+        for(auto iter = historicData.temperature.begin(); iter != historicData.temperature.end(); ++iter) {
+            iTime =  iter->first;
+            if (iter != historicData.temperature.begin()) {
+                jsonData += ",";
+            }
+            jsonData += "{\"date\":\"" + formatTimestamp(iTime) + 
+                "\",\"temperature\":" + String(historicData.temperature[iTime]) +
+                ",\"humidity\":" + String(historicData.relative_humidity[iTime]) + "}";
+        }
+        jsonData += "]";
+
+        g_wifi.setupIndex(jsonData);
     }
     LOG.printf("\n[WiFi] wifi in state %s\n", wifiStateString(g_wifi.state()));
 
@@ -252,78 +274,30 @@ void setup()
         g_ui.render(internalSensorSample, systemState, historicData, forecastData);
         g_ui.hibernate();
     }
+    
+    
+    time_t currentEpoch = readingEpoch;
+    while(currentEpoch - readingEpoch > RTC_WAKE_SECONDS) {
 
-    // LED off
-    led.ledOff();
+        currentEpoch = getEpochTime();
 
-    // play buzzer melody
-    g_buz.begin();
-    g_buz.buzzer_melody();
-}
-
-void loop()
-{
-    if (g_wifi.state() == WifiState::ApActive) {
-        
-        time_t currentEpoch = (time_t)(-1);
-        while (true) {
+        if (g_wifi.state() == WifiState::ApActive) {
             g_wifi.servePage();
-            currentEpoch = getEpochTime();
-            if(currentEpoch - readingEpoch > RTC_WAKE_SECONDS) {
-                g_sd.begin();
-                if (g_sd.isCardInserted()) {
-                    if (g_sd.mountCard()) {
-                        //g_sd.listDir("/",0);
-                        
-                        // init sensors
-                        g_bat.begin();
-                        // get internal sensors data
-                        sensorInternal_t internalSensorSample;
-                        readingEpoch = getEpochTime();
-                        internalSensorSample.timeStamp = readingEpoch;
-                        
-                        // read sensors: temperature, humidity
-                        LOG.printf("[SHT] Probing SHT4X at I2C address 0x%02X.\n", PCF8563_ADDR);
-                        if (g_sht.probe()) {
-                            LOG.printf("[SHT] probing successful.\n");
-                            if (g_sht.readSensor(internalSensorSample.temperature, internalSensorSample.humidity)) {
-                                LOG.printf("[SHT] %.2f C  %.2f %%\n", internalSensorSample.temperature, internalSensorSample.humidity);
-                            } else {
-                                LOG.printf("[SHT] read failed\n");
-                            }
-                        } else {
-                            LOG.printf("[SHT] NOT FOUND: check wiring.\n");
-                        }
-
-                        // read sensors: battery voltage
-                        if (g_bat.read(internalSensorSample.voltage)) {
-                            LOG.printf("[BAT] %.2f V\n", internalSensorSample.voltage);
-                        } else {
-                            LOG.printf("[BAT] read failed\n");
-                        }
-                        g_bat.end();
-
-                        //append latest reading
-                        if (g_sd.appendReading(internalSensorSample)) {
-                            LOG.printf("[SD] reading appended\n");
-                        } else {
-                            LOG.printf("[SD] append failed\n");
-                        }
-                    }
-                } else {
-                    LOG.printf("[SD] No card detected at startup. Please insert a card.\n");
-                }
-                g_sd.unmountCard();
-                g_sd.end();
-            }
             delay(50);
             yield();
-        }
+        } else {
+        // disable wifi if enabled
+            g_wifi.requestOff();
 
-    } else {
-    // disable wifi if enabled
-        g_wifi.requestOff();
-        
-        enterDeepSleep(RTC_WAKE_SECONDS);
+            // LED off
+            led.ledOff();
+            
+            // play buzzer melody
+            g_buz.begin();
+            g_buz.buzzer_melody();
+            
+            currentEpoch = getEpochTime();
+            enterDeepSleep(RTC_WAKE_SECONDS - (currentEpoch-readingEpoch));
+        }
     }
 }

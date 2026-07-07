@@ -56,6 +56,13 @@ static void dateIso(char *out, size_t outSize, const RtcTime &rtc)
              rtc.year, rtc.month, rtc.day, rtc.hour, rtc.minute, rtc.second);
 }
 
+static String formatTimestamp(time_t t) {
+    struct tm* timeinfo = localtime(&t);
+    char buffer[30];
+    strftime(buffer, sizeof(buffer), "%d-%m-%Y_%H:%M:%S", timeinfo);
+    return String(buffer);
+}
+
 static void dateString(char *out, size_t outSize, const RtcTime &rtc)
 {
     snprintf(out, outSize, "%04d-%02d-%02d %02d:%02d:%02d",

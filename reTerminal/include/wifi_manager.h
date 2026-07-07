@@ -34,6 +34,7 @@ public:
     void requestOff();
     void requestSta(const char *ssid, const char *pass);
     void requestAp(const char *ssid, const char *pass);
+    void setupIndex(String jsonData);
     bool checkConnection();
     void servePage();
 
@@ -43,7 +44,7 @@ private:
     uint32_t _initTime = (time_t)(-1);
     WifiState  _state = WifiState::Off;
     WebServer* _server = nullptr;
-
+    String _indexData = "";
 };
 
 #endif  // E1001_DASHBOARD_WIFI_MANAGER_H

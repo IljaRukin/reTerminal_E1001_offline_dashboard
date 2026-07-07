@@ -182,6 +182,8 @@ static void saveNvsCredentials(std::string p_nvsStaSsid,
         }
     }
     prefs.end();
+    //reload
+    loadNvsCredentials();
 }
 
 #endif  // E1001_DASHBOARD_CONFIG_H

@@ -3,7 +3,7 @@
 
 // ----- Webserver -----
 
-static const char indexHtml[] PROGMEM = R"HTML(
+static const char indexHtml[] = R"HTML(
 <!doctype html><html><head><meta charset="utf-8">
 <title>reTerminal - Setup</title>
 <style>
@@ -24,154 +24,80 @@ button{padding:.6em 1.2em;font-size:1em;margin-top:.6em;cursor:pointer}
 <h2>Temperature in °C</h2>
 <div id="temperature"></div>
 
-<script>
-
-// parse the date / time
-var parseTime = d3.timeParse("%d-%m-%Y_%H:%M:%S");
-
-// set the dimensions and margins of the graph
-var margin = {top: 10, right: 30, bottom: 30, left: 60},
-    width1 = 800 - margin.left - margin.right,
-    height1 = 300 - margin.top - margin.bottom;
-
-// set the ranges
-var x1 = d3.scaleTime().range([0, width1]);
-var y1 = d3.scaleLinear().range([height1, 0]);
-
-// define the 1st line
-var valueline1 = d3.line()
-    .x(function(d) { return x1(d.date); })
-    .y(function(d) { return y1(d.temperature); });
-
-// append the svg obgect to the the page
-var svg1 = d3.select("#temperature")
-  .append("svg")
-    .attr("width", width1 + margin.left + margin.right)
-    .attr("height", height1 + margin.top + margin.bottom)
-  .append("g")
-    .attr("transform",
-          "translate(" + margin.left + "," + margin.top + ")");
-
-//##### Get the data #####
-
-d3.csv("weather/temperature.csv", function(error, data) {
-  if (error) throw error;
-
-  // format the data
-  data.forEach(function(d) {
-      d.date = parseTime(d.date);
-      d.temperature = +d.temperature;
-  });
-
-//##### plot#####
-
-  // Scale the range of the data
-  x1.domain(d3.extent(data, function(d) { return d.date; }));
-  y1.domain([d3.min(data, function(d) {
-    return Math.min(d.temperature); })
-    ,d3.max(data, function(d) {
-    return Math.max(d.temperature); })]);
-
-  // Add the valueline path.
-  svg1.append("path")
-      .data([data])
-      .attr("fill", "none")
-      .attr("class", "line")
-      .style("stroke", "red")
-      .attr("d", valueline1);
-
-  // Add the X Axis
-  svg1.append("g")
-      .attr("transform", "translate(0," + height1 + ")")
-      .call(d3.axisBottom(x1));
-
-  // Add the Y Axis
-  svg1.append("g")
-      .call(d3.axisLeft(y1));
-
-});
-
-</script>
-
 <h2>Humidity in %</h2>
 <div id="humidity"></div>
-
-<script>
-
-// parse the date / time
-var parseTime = d3.timeParse("%d-%m-%Y_%H:%M:%S");
-
-// set the dimensions and margins of the graph
-var margin = {top: 10, right: 30, bottom: 30, left: 60},
-    width1 = 800 - margin.left - margin.right,
-    height1 = 300 - margin.top - margin.bottom;
-
-// set the ranges
-var x2 = d3.scaleTime().range([0, width1]);
-var y2 = d3.scaleLinear().range([height1, 0]);
-
-// define the 1st line
-var valueline2 = d3.line()
-    .x(function(d) { return x2(d.date); })
-    .y(function(d) { return y2(d.humidity); });
-
-// append the svg obgect to the the page
-var svg2 = d3.select("#humidity")
-  .append("svg")
-    .attr("width", width1 + margin.left + margin.right)
-    .attr("height", height1 + margin.top + margin.bottom)
-  .append("g")
-    .attr("transform",
-          "translate(" + margin.left + "," + margin.top + ")");
-
-//##### Get the data #####
-
-d3.csv("weather/humidity.csv", function(error, data) {
-  if (error) throw error;
-
-  // format the data
-  data.forEach(function(d) {
-      d.date = parseTime(d.date);
-      d.humidity = +d.humidity;
-  });
-
-//##### plot#####
-
-  // Scale the range of the data
-  x2.domain(d3.extent(data, function(d) { return d.date; }));
-  y2.domain([0,100]);
-
-  // Add the valueline path.
-  svg2.append("path")
-      .data([data])
-      .attr("fill", "none")
-      .attr("class", "line")
-      .style("stroke", "blue")
-      .attr("d", valueline2);
-
-  // Add the X Axis
-  svg2.append("g")
-      .attr("transform", "translate(0," + height1 + ")")
-      .call(d3.axisBottom(x2));
-
-  // Add the Y Axis
-  svg2.append("g")
-      .call(d3.axisLeft(y2));
-
-});
-
-</script>
 
 <h2>Pressure in mBar</h2>
 <div id="pressure"></div>
 
 <script>
+var chartData = JSON.parse(decodeURIComponent('%CHART_DATA%'));
+
+// parse the date / time
+var parseTime = d3.timeParse("%d-%m-%Y_%H:%M:%S");
+
+function createChart(selector, dataKey, color, yDomain) {
+  var margin = {top: 10, right: 30, bottom: 30, left: 60},
+      width = 800 - margin.left - margin.right,
+      height = 300 - margin.top - margin.bottom;
+
+  var x = d3.scaleTime().range([0, width]);
+  var y = d3.scaleLinear().range([height, 0]);
+
+  var valueline = d3.line()
+      .x(function(d) { return x(d.date); })
+      .y(function(d) { return y(d[dataKey]); });
+
+  var svg = d3.select(selector)
+    .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  var data = chartData.map(function(d) {
+      return {
+          date: parseTime(d.date),
+          temperature: +d.temperature,
+          humidity: +d.humidity,
+          pressure: +d.pressure
+      };
+  });
+
+  x.domain(d3.extent(data, function(d) { return d.date; }));
+  
+  if (yDomain) {
+      y.domain(yDomain);
+  } else {
+      y.domain([d3.min(data, function(d) { return d[dataKey]; }),
+                d3.max(data, function(d) { return d[dataKey]; })]);
+  }
+
+  svg.append("path")
+      .data([data])
+      .attr("fill", "none")
+      .attr("class", "line")
+      .style("stroke", color)
+      .attr("d", valueline);
+
+  svg.append("g")
+      .attr("transform", "translate(0," + height + ")")
+      .call(d3.axisBottom(x));
+
+  svg.append("g")
+      .call(d3.axisLeft(y));
+}
+
+createChart("#temperature", "temperature", "red");
+createChart("#humidity", "humidity", "blue", [0, 100]);
+createChart("#pressure", "pressure", "green");
+</script>
 
 <p><a href="/setup">go to setup</a></p>
 </body></html>
 )HTML";
 
-static const char configHtml[] PROGMEM = R"HTML(
+static const char configHtml[] = R"HTML(
 <!doctype html><html><head><meta charset="utf-8">
 <title>reTerminal - Setup</title>
 <style>
@@ -194,8 +120,8 @@ button{padding:.6em 1.2em;font-size:1em;margin-top:.6em;cursor:pointer}
 <form method="POST" action="/config">
 <label>SSID</label>       <input type="text"     name="ssid" required>
 <label>Password</label>   <input type="password" name="pass">
-<label>Latitude</label>   <input type="number"   name="lat" step="0.001" value="+std::to_string(nvsForecastLatitude)+"> TODO:fix including coord
-<label>Longitude</label>  <input type="number"   name="lon" step="0.001" value="+std::to_string(nvsForecastLongitude)+"> TODO:fix including coord
+<label>Latitude</label>   <input type="number"   name="lat" step="0.001" value="%LAT_VALUE%">
+<label>Longitude</label>  <input type="number"   name="lon" step="0.001" value="%LON_VALUE%">
 <label>Master Key</label> <input type="password" name="masterKey" required>
 <button type="submit">save</button>
 </form>
@@ -205,12 +131,44 @@ button{padding:.6em 1.2em;font-size:1em;margin-top:.6em;cursor:pointer}
 </body></html>
 )HTML";
 
+// ---- Helper functions ----
+
+String urlEncode(const String& str) {
+    String encoded = "";
+    for (size_t i = 0; i < str.length(); i++) {
+        char c = str[i];
+        if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || 
+            (c >= 'a' && c <= 'z') || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded += c;
+        } else {
+            encoded += '%';
+            char hex[3];
+            sprintf(hex, "%02X", (unsigned char)c);
+            encoded += hex;
+        }
+    }
+    return encoded;
+}
+
 // ---- handlers ----
+
+void WifiManager::setupIndex(String jsonData)
+{
+    _indexData = urlEncode(jsonData);
+}
 
 void WifiManager::handleIndex()
 {
     if (_server) {
-        _server->send(200, "text/html", indexHtml);
+        
+        // URL encode the JSON data
+        String encodedData = urlEncode(_indexData);
+        
+        // Replace placeholder with actual data
+        String html = String(indexHtml);
+        html.replace("%CHART_DATA%", encodedData);
+        
+        _server->send(200, "text/html", html);
     } else {
         LOG.println("[WiFi] ERROR: AP server not running");
         requestOff();
@@ -220,7 +178,16 @@ void WifiManager::handleIndex()
 void WifiManager::handleSetup()
 {
     if (_server) {
-        _server->send(200, "text/html", configHtml);
+        // Get stored coordinates from NVS
+        String lat = String(nvsForecastLatitude, 3);
+        String lon = String(nvsForecastLongitude, 3);
+        
+        // Build HTML with coordinates inserted
+        String html = String(configHtml);
+        html.replace("%LAT_VALUE%", lat);
+        html.replace("%LON_VALUE%", lon);
+
+        _server->send(200, "text/html", html);
     } else {
         LOG.println("[WiFi] ERROR: AP server not running");
         requestOff();
@@ -364,7 +331,7 @@ void WifiManager::requestAp(const char *ssid, const char *pass)
     _server = &server;
     _server->on("/",        HTTP_GET,  [this]() { handleIndex(); });
     _server->on("/ingest",  HTTP_POST, [this]() { handleIngest(); });
-    _server->on("/setup",   HTTP_POST, [this]() { handleSetup(); });
+    _server->on("/setup",   HTTP_GET,  [this]() { handleSetup(); });
     _server->on("/config",  HTTP_POST, [this]() { handleConfig(); });
     _server->onNotFound([this]() { handleNotFound(); });
     _server->begin();
