@@ -321,8 +321,9 @@ void WifiManager::requestAp(const char *ssid, const char *pass)
     }
     LOG.printf("[WiFi] requesting AP\n");
     WiFi.mode(WIFI_AP);
-    if (!WiFi.softAP(ssid, pass, AP_CHANNEL)) {
-        log_e("[WiFi] AP creation failed.");
+    if (!WiFi.softAP(ssid, pass)) {
+        
+        LOG.printf("[WiFi] AP creation failed.\n");
         requestOff();
         return;
     }
@@ -335,10 +336,10 @@ void WifiManager::requestAp(const char *ssid, const char *pass)
     _server->on("/config",  HTTP_POST, [this]() { handleConfig(); });
     _server->onNotFound([this]() { handleNotFound(); });
     _server->begin();
+    LOG.printf("[WiFi] requested AP\n");
 
     _initTime = millis();
     _state = WifiState::ApActive;
-    LOG.printf("[WiFi] AP up: %s\n", WiFi.localIP().toString().c_str());
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("[WiFi] AP IP address:");
     Serial.println(myIP);

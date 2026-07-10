@@ -1,3 +1,4 @@
+#define LOG_E_ENABLED  // Enable error-level logging
 #include <Arduino.h>
 #include <algorithm>
 #include <stdio.h>
@@ -43,6 +44,7 @@ void setup()
     led.ledOn();
 
     // init serial
+    //esp_log_level_set("*", ESP_LOG_ERROR);  // Enable error-level logging
     LOG.printf("[BOOT] %s v%s\n", FW_NAME, FW_VERSION);
     LOG.begin(LOG_BAUD, SERIAL_8N1, PIN_SERIAL_RX, PIN_SERIAL_TX);
     while (!LOG) {
@@ -244,7 +246,7 @@ void loop()
     
     //wifi ap mode
     if (wakeupState==wakeupState_t::MidButton) {
-        g_wifi.requestAp(nvsApSsid.c_str(), nvsApPassword.c_str());
+        LOG.printf("[Wifi] setting up AP mode\n");
         
         // Build JSON data string
         String jsonData = "[";
@@ -261,6 +263,8 @@ void loop()
         jsonData += "]";
 
         g_wifi.setupIndex(jsonData);
+
+        g_wifi.requestAp(nvsApSsid.c_str(), nvsApPassword.c_str());
     }
     LOG.printf("\n[WiFi] wifi in state %s\n", wifiStateString(g_wifi.state()));
 
@@ -272,12 +276,12 @@ void loop()
 
         g_ui.begin();
         g_ui.render(internalSensorSample, systemState, historicData, forecastData);
-        g_ui.hibernate();
+        //g_ui.hibernate();
     }
     
     
     time_t currentEpoch = readingEpoch;
-    while(currentEpoch - readingEpoch > RTC_WAKE_SECONDS) {
+    while(currentEpoch - readingEpoch < RTC_WAKE_SECONDS) {
 
         currentEpoch = getEpochTime();
 
@@ -286,7 +290,7 @@ void loop()
             delay(50);
             yield();
         } else {
-        // disable wifi if enabled
+            // disable wifi if enabled
             g_wifi.requestOff();
 
             // LED off
